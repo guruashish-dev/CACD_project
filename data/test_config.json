@@ -1,0 +1,12 @@
+{
+  "bind_host": "127.0.0.1",
+  "protocols": {
+    "ssh": { "port": 22022, "enabled": true },
+    "http": { "port": 22080, "enabled": true },
+    "ftp": { "port": 22021, "enabled": true },
+    "telnet": { "port": 22023, "enabled": true },
+    "mysql": { "port": 23306, "enabled": true },
+    "smtp": { "port": 22025, "enabled": true }
+  },
+  "dashboard": { "host": "127.0.0.1", "port": 28080 }
+}

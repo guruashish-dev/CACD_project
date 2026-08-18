@@ -1,0 +1,73 @@
+{
+  "bind_host": "0.0.0.0",
+  "data_dir": "data",
+
+  "protocols": {
+    "ssh": {
+      "port": 22,
+      "enabled": true,
+      "banner": "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6"
+    },
+    "http": {
+      "port": 80,
+      "enabled": true,
+      "banner": "Apache/2.4.52 (Ubuntu) Server at localhost"
+    },
+    "ftp": {
+      "port": 21,
+      "enabled": true,
+      "banner": "220 ProFTPD 1.3.5e Server (Debian) [::ffff:127.0.0.1]"
+    },
+    "telnet": {
+      "port": 23,
+      "enabled": true,
+      "banner": "Debian GNU/Linux 11"
+    },
+    "mysql": {
+      "port": 3306,
+      "enabled": true,
+      "banner": "MySQL 5.7.38-0ubuntu0.18.04.1"
+    },
+    "smtp": {
+      "port": 25,
+      "enabled": true,
+      "banner": "220 mail.example ESMTP Postfix (Ubuntu)"
+    }
+  },
+
+  "http_decoy_paths": [
+    "/", "/wp-login.php", "/wp-admin/", "/admin/", "/admin/login.php",
+    "/phpmyadmin/", "/manager/html", "/cgi-bin/test.cgi",
+    "/.env", "/.git/config", "/config.php.bak", "/db.sql",
+    "/api/v1/users", "/sql/", "/old/", "/backup.zip", "/login"
+  ],
+
+  "intel": {
+    "bruteforce_threshold": 5,
+    "bruteforce_window_sec": 60,
+    "recon_probes_threshold": 10,
+    "recon_window_sec": 30,
+    "multivector_protocols": 3
+  },
+
+  "alerts": {
+    "bruteforce": { "enabled": true, "severity": "high" },
+    "credential_stuffing": { "enabled": true, "severity": "medium" },
+    "multivector": { "enabled": true, "severity": "critical" },
+    "recon_scan": { "enabled": true, "severity": "low" }
+  },
+
+  "default_credentials": [
+    ["admin", "admin"], ["admin", "password"], ["admin", "123456"],
+    ["root", "root"], ["root", "toor"], ["root", "123456"],
+    ["root", "password"], ["test", "test"], ["user", "user"],
+    ["guest", "guest"], ["admin", "admin123"], ["root", "root123"],
+    ["postgres", "postgres"], ["oracle", "oracle"], ["mysql", "mysql"],
+    ["pi", "raspberry"], ["ubuntu", "ubuntu"], ["tomcat", "tomcat"]
+  ],
+
+  "dashboard": {
+    "host": "127.0.0.1",
+    "port": 8080
+  }
+}

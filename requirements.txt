@@ -1,0 +1,3 @@
+# Dependencies for the Multi-Protocol Honeypot Network
+flask>=3.0        # live web dashboard (already installed in this environment)
+paramiko>=3.4     # SSH honeypot server + SSH attack client

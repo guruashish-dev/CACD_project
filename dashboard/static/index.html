@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Honeypot Network — Live Threat Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
+    --blue:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --purple:#bc8cff;
+    --cyan:#39c5cf; --pink:#f778ba;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Segoe UI",Roboto,Arial,sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid var(--border);
+           position:sticky; top:0; background:rgba(13,17,23,.92); backdrop-filter:blur(6px); z-index:10; }
+  header h1 { font-size:20px; margin:0; }
+  .sub { color:var(--muted); font-size:13px; }
+  .status { display:flex; align-items:center; gap:7px; margin-left:auto; color:var(--muted); font-size:13px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+  .wrap { padding:22px 26px; max-width:1400px; margin:0 auto; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:20px; }
+  .kpi { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 18px; }
+  .kpi .v { font-size:28px; font-weight:700; }
+  .kpi .l { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+  .grid { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .panel h3 { margin:0 0 10px; font-size:14px; }
+  .chartbox { position:relative; height:190px; }
+  .feed { display:flex; flex-direction:column; gap:8px; max-height:520px; overflow-y:auto; padding-right:4px; }
+  .evt { border-left:3px solid var(--muted); background:#0d1117; border-radius:6px; padding:8px 10px; font-size:12.5px; }
+  .evt .t { color:var(--muted); font-family:Consolas,monospace; font-size:11px; }
+  .evt.connection { border-left-color:var(--muted); }
+  .evt.credential { border-left-color:var(--yellow); }
+  .evt.command    { border-left-color:var(--cyan); }
+  .evt.alert      { border-left-color:var(--red); }
+  .evt.intel      { border-left-color:var(--blue); }
+  .badge { display:inline-block; border:1px solid; border-radius:4px; padding:0 6px; font-size:10px; text-transform:uppercase; margin-right:6px; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .tab { padding:7px 14px; border-radius:8px; cursor:pointer; background:var(--panel); border:1px solid var(--border); color:var(--muted); font-size:13px; }
+  .tab.active { background:#1f2937; color:var(--text); border-color:var(--blue); }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th { text-align:left; color:var(--muted); font-weight:500; padding:6px 8px; border-bottom:1px solid var(--border);
+       font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  td { padding:6px 8px; border-bottom:1px solid var(--border); }
+  .mono { font-family:Consolas,Menlo,monospace; }
+  .sev-low{color:var(--green)} .sev-medium{color:var(--yellow)} .sev-high{color:var(--pink)} .sev-critical{color:var(--red)} .sev-info{color:var(--muted)}
+  .riskbar { width:70px; height:7px; background:var(--bg); border-radius:4px; overflow:hidden; }
+  .riskfill { height:100%; }
+  footer { color:var(--muted); font-size:12px; padding:16px 26px; border-top:1px solid var(--border); }
+  .empty { color:var(--muted); padding:18px; text-align:center; }
+  @media (max-width:1000px){ .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡️ Honeypot Network</h1>
+  <div class="sub">Multi-Protocol Cyber Attack Detection &amp; Threat Intelligence</div>
+  <div class="status"><span class="dot" id="statusdot"></span><span id="statuslabel">connected</span></div>
+</header>
+
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi"><div class="v" id="k-attacks" style="color:var(--blue)">–</div><div class="l">Total attacks</div></div>
+    <div class="kpi"><div class="v" id="k-sources" style="color:var(--purple)">–</div><div class="l">Attacker sources</div></div>
+    <div class="kpi"><div class="v" id="k-creds" style="color:var(--pink)">–</div><div class="l">Credentials captured</div></div>
+    <div class="kpi"><div class="v" id="k-cmds" style="color:var(--cyan)">–</div><div class="l">Commands logged</div></div>
+    <div class="kpi"><div class="v" id="k-alerts" style="color:var(--red)">–</div><div class="l">Alerts raised</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <div class="panel"><h3>Attack activity (last 10 min)</h3><div class="chartbox"><canvas id="c-timeline"></canvas></div></div>
+      <div class="panel"><h3>Attacks per protocol</h3><div class="chartbox"><canvas id="c-protocols"></canvas></div></div>
+      <div class="panel"><h3>Top attack sources</h3><div class="chartbox"><canvas id="c-sources"></canvas></div></div>
+    </div>
+    <div class="col">
+      <div class="panel"><h3>Live attack feed</h3><div class="feed" id="feed"><div class="empty">Waiting for events…</div></div></div>
+      <div class="panel"><h3>Alerts</h3><div class="feed" id="alerts"><div class="empty">No alerts yet</div></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="credentials">Credentials</div>
+      <div class="tab" data-tab="intel">Threat Intelligence</div>
+      <div class="tab" data-tab="commands">Commands</div>
+      <div class="tab" data-tab="connections">Connections</div>
+    </div>
+    <div id="table-area"><div class="empty">Loading…</div></div>
+  </div>
+</div>
+
+<footer>Honeypot Network · defensive security demonstration · all traffic shown is from local simulations</footer>
+
+<script>
+const COLORS = { ssh:'#3fb950', http:'#58a6ff', ftp:'#d29922', telnet:'#bc8cff', mysql:'#39c5cf', smtp:'#f778ba' };
+const SEV = { info:'sev-info', low:'sev-low', medium:'sev-medium', high:'sev-high', critical:'sev-critical' };
+const RISK = c => c>=80 ? '#f85149' : c>=50 ? '#f778ba' : c>=25 ? '#d29922' : '#3fb950';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = ts => (ts||'').replace('T',' ').replace(/\.\d+Z?/,'');
+let activeTab = 'credentials';
+let charts = {};
+
+function kpi(id){ return document.getElementById(id); }
+
+function setKpis(counts){
+  kpi('k-attacks').textContent = counts.connections ?? 0;
+  kpi('k-sources').textContent = counts.sources ?? 0;
+  kpi('k-creds').textContent = counts.credentials ?? 0;
+  kpi('k-cmds').textContent = counts.commands ?? 0;
+  kpi('k-alerts').textContent = counts.alerts ?? 0;
+}
+
+function refreshStats(){
+  fetch('/api/stats').then(r=>r.json()).then(s=>{
+    setKpis(s.counts);
+    drawTimeline(s.timeline);
+    drawProtocols(s.protocols);
+    drawSources(s.top_sources);
+  }).catch(()=>{ kpi('statusdot').style.background = 'var(--red)'; kpi('statuslabel').textContent='offline'; });
+}
+
+function makeChart(id, cfg){
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+  return charts[id];
+}
+
+function drawTimeline(tl){
+  makeChart('c-timeline', {
+    type:'line',
+    data:{ labels: tl.map(d=>d.bucket.slice(11)), datasets:[{
+      data: tl.map(d=>d.count), borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,.18)',
+      fill:true, tension:.35, pointRadius:0, borderWidth:2 }]},
+    options: gridOpts({ y:{ beginAtZero:true, ticks:{ precision:0 } } })
+  });
+}
+function drawProtocols(list){
+  makeChart('c-protocols', {
+    type:'bar',
+    data:{ labels: list.map(d=>d.protocol), datasets:[{
+      data: list.map(d=>d.count), backgroundColor: list.map(d=>COLORS[d.protocol]||'#a5d6ff'),
+      borderRadius:4 }]},
+    options: gridOpts({ indexAxis:'y', x:{ beginAtZero:true, ticks:{ precision:0 } } })
+  });
+}
+function drawSources(sources){
+  makeChart('c-sources', {
+    type:'bar',
+    data:{ labels: sources.map(d=>d.src_ip), datasets:[{
+      data: sources.map(d=>d.attempts), backgroundColor:'rgba(188,140,255,.75)', borderRadius:4 }]},
+    options: gridOpts({ indexAxis:'y', x:{ beginAtZero:true, ticks:{ precision:0 } } })
+  });
+}
+function gridOpts(extra){
+  return Object.assign({
+    responsive:true, maintainAspectRatio:false, animation:{duration:400},
+    plugins:{ legend:{ display:false },
+      tooltip:{ backgroundColor:'#161b22', borderColor:'#30363d', borderWidth:1 } }
+  }, extra);
+}
+
+/* ---------- Live feed ---------- */
+function addFeed(ev){
+  const box = document.getElementById('feed');
+  const empty = box.querySelector('.empty'); if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = 'evt ' + ev.kind;
+  let body = '';
+  if (ev.kind === 'connection') body = `CONN <b>${esc(ev.protocol)}</b> <- ${esc(ev.src_ip)}:${esc(ev.src_port)}`;
+  else if (ev.kind === 'credential') body = `AUTH <b>${esc(ev.protocol)}</b> <- ${esc(ev.src_ip)} · <span class="mono">${esc(ev.username)} / ${esc(ev.password)}</span>`;
+  else if (ev.kind === 'command') body = `CMD <b>${esc(ev.protocol)}</b> <- ${esc(ev.src_ip)} · <span class="mono">${esc(ev.command)}</span>`;
+  else if (ev.kind === 'intel') body = `INTEL ${esc(ev.src_ip)} risk=<b>${esc(ev.risk)}</b> · ${esc(ev.classification)}`;
+  else if (ev.kind === 'alert') body = `ALERT <span class="${SEV[ev.severity]||''}"><b>${esc(ev.severity).toUpperCase()}</b></span> ${esc(ev.title)}`;
+  else body = esc(JSON.stringify(ev));
+  el.innerHTML = `<div class="t">${fmt(ev.ts)}</div>${body}`;
+  box.prepend(el);
+  while (box.children.length > 200) box.lastChild.remove();
+  if (ev.kind === 'alert') addAlert(ev);
+}
+
+function addAlert(ev){
+  const box = document.getElementById('alerts');
+  const empty = box.querySelector('.empty'); if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = 'evt alert';
+  el.innerHTML = `<div class="t">${fmt(ev.ts)}</div><span class="sev-critical"><b>${esc(ev.severity).toUpperCase()}</b></span> ${esc(ev.title)}<br>
+    <span class="mono">${esc(ev.detail||'')}</span>`;
+  box.prepend(el);
+  while (box.children.length > 100) box.lastChild.remove();
+}
+
+function connectSSE(){
+  const es = new EventSource('/api/stream');
+  es.onmessage = e => {
+    try { addFeed(JSON.parse(e.data)); } catch(err){}
+    if (Date.now() - lastStatsRefresh > 2000) refreshStats();
+  };
+  es.onerror = () => { document.getElementById('statusdot').style.background='var(--red)'; };
+  es.onopen = () => { document.getElementById('statusdot').style.background='var(--green)'; };
+}
+let lastStatsRefresh = 0;
+const _r = refreshStats;
+refreshStats = function(){ lastStatsRefresh = Date.now(); return _r(); };
+
+/* ---------- Tables ---------- */
+function loadTable(tab){
+  const area = document.getElementById('table-area');
+  area.innerHTML = '<div class="empty">Loading…</div>';
+  const url = { credentials:'/api/credentials', intel:'/api/intel', commands:'/api/commands', connections:'/api/connections' }[tab];
+  fetch(url).then(r=>r.json()).then(rows=>{ area.innerHTML = ''; area.appendChild(buildTable(tab, rows)); });
+}
+
+function buildTable(tab, rows){
+  const table = document.createElement('table');
+  if (tab === 'credentials'){
+    table.innerHTML = thead(['Time','Protocol','Source IP','Username','Password','Outcome']);
+    for (const r of rows) table.appendChild(row([ fmt(r.ts), badge(r.protocol), mono(r.src_ip), mono(r.username), mono(r.password), esc(r.outcome) ]));
+  } else if (tab === 'intel'){
+    table.innerHTML = thead(['Source IP','Risk','Score','Classification','Attempts','Protocols']);
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.appendChild(td(mono(r.src_ip)));
+      const rbt = td('');
+      const rb = document.createElement('div'); rb.className='riskbar';
+      const rf = document.createElement('div'); rf.className='riskfill';
+      rf.style.width = (r.score||0)+'%'; rf.style.background = RISK(r.score||0);
+      rb.appendChild(rf); rbt.appendChild(rb); tr.appendChild(rbt);
+      tr.appendChild(td(`<b style="color:${RISK(r.score||0)}">${r.score||0}</b>`));
+      tr.appendChild(td(esc(r.classification||'unknown')));
+      tr.appendChild(td(esc(r.attempts)));
+      tr.appendChild(td(mono(r.protocols_hit||'')));
+      table.appendChild(tr);
+    }
+  } else if (tab === 'commands'){
+    table.innerHTML = thead(['Time','Protocol','Source IP','Command','Response']);
+    for (const r of rows) table.appendChild(row([ fmt(r.ts), badge(r.protocol), mono(r.src_ip), mono(r.command), mono((r.response||'').slice(0,80)) ]));
+  } else {
+    table.innerHTML = thead(['Time','Protocol','Source IP','Src Port','Details']);
+    for (const r of rows) table.appendChild(row([ fmt(r.ts), badge(r.protocol), mono(r.src_ip), esc(r.src_port), mono(r.details ? (r.details.path||JSON.stringify(r.details)).slice(0,60) : '') ]));
+  }
+  if (!rows.length) { const d = document.createElement('div'); d.className='empty'; d.textContent='No data yet.'; return d; }
+  return table;
+}
+function thead(cols){ return '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>'; }
+function row(cells){
+  const tr = document.createElement('tr');
+  for (const c of cells){ const t = document.createElement('td'); t.innerHTML = c; tr.appendChild(t); }
+  return tr;
+}
+function td(html){ const t = document.createElement('td'); t.innerHTML = html; return t; }
+function mono(s){ return `<span class="mono">${esc(s)}</span>`; }
+function badge(p){ return `<span class="badge" style="border-color:${COLORS[p]||'#a5d6ff'};color:${COLORS[p]||'#a5d6ff'}">${esc(p)}</span>`; }
+
+/* ---------- Init ---------- */
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); activeTab = t.dataset.tab; loadTable(activeTab);
+});
+refreshStats(); loadTable('credentials'); connectSSE();
+setInterval(refreshStats, 3000);
+</script>
+</body>
+</html>
