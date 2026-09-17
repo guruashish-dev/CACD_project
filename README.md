@@ -1,4 +1,4 @@
-# Multi-Protocol Honeypot Network — `honey`
+# Multi-Protocol Honeypot Network
 
 A defensive-security **demonstration project**: a network of fake services
 that *invites* simulated attacks, captures everything an attacker does, turns
