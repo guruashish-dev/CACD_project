@@ -247,3 +247,4 @@ This project exists for **defensive security training and demonstration**.
 Honeypots attract attacker traffic by design — run them only on networks you
 control, and never point them at production systems or the internet without
 proper isolation.
+
